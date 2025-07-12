@@ -1,7 +1,7 @@
 [project]
 name = "applifting-python-sdk"
 version = "0.1.0"
-description = "Add your description here"
+description = "A Python SDK for the Applifting Offers microservice API."
 readme = "README.md"
 authors = [
     { name = "vsem-azamat", email = "almazbek1608@gmail.com" }
