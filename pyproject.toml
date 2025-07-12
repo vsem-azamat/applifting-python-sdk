@@ -1,0 +1,28 @@
+[project]
+name = "applifting-python-sdk"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "vsem-azamat", email = "almazbek1608@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "attrs>=23.2.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project.optional-dependencies]
+dev = [
+    "openapi-python-client>=0.25.2",
+    "mypy>=1.16.1",
+    "pytest>=8.4.1",
+    "pytest-asyncio>=1.0.0",
+    "respx>=0.22.0",
+    "ruff>=0.12.3",
+    "typer>=0.16.0",
+]
