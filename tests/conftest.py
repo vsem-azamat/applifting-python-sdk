@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import os
+from collections.abc import AsyncGenerator
 from pathlib import Path
-from typing import AsyncGenerator
 
 import pytest
 import pytest_asyncio
@@ -52,9 +52,7 @@ def refresh_token() -> str:
 
 
 @pytest_asyncio.fixture
-async def async_offers_client(
-    base_url: str, refresh_token: str
-) -> AsyncGenerator[AsyncOffersClient, None]:
+async def async_offers_client(base_url: str, refresh_token: str) -> AsyncGenerator[AsyncOffersClient, None]:
     """Provides an initialized AsyncOffersClient instance that is properly closed."""
     async with AsyncOffersClient(refresh_token=refresh_token, base_url=base_url) as client:
         yield client

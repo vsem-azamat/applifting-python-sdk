@@ -13,7 +13,6 @@ from applifting_python_sdk import AsyncOffersClient
 from applifting_python_sdk.exceptions import APIError, ProductAlreadyExists, ProductNotFound
 from applifting_python_sdk.models import Product
 
-
 # --------------------------------------------------------------------------- #
 # register_product                                                            #
 # --------------------------------------------------------------------------- #
@@ -25,9 +24,7 @@ async def test_register_product_success(
 ) -> None:
     """Ensure a successful 201 response returns the product ID."""
     # Mock auth and register endpoints
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     product_id = uuid4()
     register_route = respx_mock.post(f"{base_url}/api/v1/products/register").mock(
         return_value=httpx.Response(201, json={"id": str(product_id)})
@@ -45,9 +42,7 @@ async def test_register_product_conflict(
     respx_mock: respx.MockRouter, base_url: str, async_offers_client: AsyncOffersClient
 ) -> None:
     """A 409 response should raise ProductAlreadyExists."""
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     respx_mock.post(f"{base_url}/api/v1/products/register").mock(return_value=httpx.Response(409))
 
     product = Product(name="Widget", description="Test widget")
@@ -60,9 +55,7 @@ async def test_register_product_generic_error(
     respx_mock: respx.MockRouter, base_url: str, async_offers_client: AsyncOffersClient
 ) -> None:
     """Any unexpected status should raise APIError."""
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     respx_mock.post(f"{base_url}/api/v1/products/register").mock(return_value=httpx.Response(500))
 
     product = Product(name="Widget", description="Test widget")
@@ -80,9 +73,7 @@ async def test_get_offers_success(
     respx_mock: respx.MockRouter, base_url: str, async_offers_client: AsyncOffersClient
 ) -> None:
     """Ensure a 200 response is converted into Offer objects."""
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     product_id = uuid4()
     offer_id = uuid4()
     offers_route = respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
@@ -104,13 +95,9 @@ async def test_get_offers_not_found(
     respx_mock: respx.MockRouter, base_url: str, async_offers_client: AsyncOffersClient
 ) -> None:
     """A 404 response should raise ProductNotFound."""
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     product_id = uuid4()
-    respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
-        return_value=httpx.Response(404)
-    )
+    respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(return_value=httpx.Response(404))
 
     with pytest.raises(ProductNotFound):
         await async_offers_client.get_offers(product_id)
@@ -121,13 +108,9 @@ async def test_get_offers_generic_error(
     respx_mock: respx.MockRouter, base_url: str, async_offers_client: AsyncOffersClient
 ) -> None:
     """Any unexpected status should raise APIError."""
-    respx_mock.post(f"{base_url}/api/v1/auth").mock(
-        return_value=httpx.Response(201, json={"access_token": "token"})
-    )
+    respx_mock.post(f"{base_url}/api/v1/auth").mock(return_value=httpx.Response(201, json={"access_token": "token"}))
     product_id = uuid4()
-    respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
-        return_value=httpx.Response(500)
-    )
+    respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(return_value=httpx.Response(500))
 
     with pytest.raises(APIError):
         await async_offers_client.get_offers(product_id)

@@ -12,7 +12,12 @@ from .exceptions import (
     ProductAlreadyExists,
     ProductNotFound,
 )
-from .models import Offer, Product
+from .models import (
+    Offer,
+    Product,
+    RegisterProductRequest,
+    RegisterProductResponse,
+)
 
 __all__ = [
     "AsyncOffersClient",
@@ -23,4 +28,6 @@ __all__ = [
     "APIError",
     "Offer",
     "Product",
+    "RegisterProductRequest",
+    "RegisterProductResponse",
 ]

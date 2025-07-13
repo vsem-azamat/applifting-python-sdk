@@ -1,6 +1,8 @@
 import asyncio
 import time
-from typing import AsyncGenerator, Generator, List, Optional, cast
+from collections.abc import AsyncGenerator, Generator
+from types import TracebackType
+from typing import Any, cast
 from uuid import UUID
 
 import httpx
@@ -60,7 +62,7 @@ class TokenManager:
     def __init__(self, refresh_token: str, client: GeneratedClient):
         self._refresh_token = refresh_token
         self._client = client
-        self._access_token: Optional[str] = None
+        self._access_token: str | None = None
         self._expires_at: float = 0
         self._lock = asyncio.Lock()
 
@@ -106,7 +108,9 @@ class TokenManager:
 class AsyncOffersClient:
     """High-level async client for the Applifting Offers API."""
 
-    def __init__(self, refresh_token: str, base_url: str = "https://python.exercise.applifting.cz", **httpx_args):
+    def __init__(
+        self, refresh_token: str, base_url: str = "https://python.exercise.applifting.cz", **httpx_args: Any
+    ) -> None:
         if not refresh_token:
             raise ValueError("A refresh_token must be provided.")
 
@@ -144,13 +148,11 @@ class AsyncOffersClient:
             parsed_response = cast(RegisterProductResponse, response.parsed)
             return parsed_response.id
         if response.status_code == 409:
-            raise ProductAlreadyExists(
-                response.status_code, f"Product with ID '{product.id}' already exists."
-            )
+            raise ProductAlreadyExists(response.status_code, f"Product with ID '{product.id}' already exists.")
 
         raise APIError(response.status_code, response.content.decode(errors="ignore"))
 
-    async def get_offers(self, product_id: UUID) -> List[Offer]:
+    async def get_offers(self, product_id: UUID) -> list[Offer]:
         """
         Retrieves all offers for a specific product.
 
@@ -169,15 +171,17 @@ class AsyncOffersClient:
         )
 
         if response.status_code == 200 and response.parsed:
-            offer_responses = cast(List[OfferResponse], response.parsed)
+            offer_responses = cast(list[OfferResponse], response.parsed)
             return [Offer.from_offer_response(o) for o in offer_responses]
         if response.status_code == 404:
             raise ProductNotFound(response.status_code, f"Product with ID '{product_id}' not found.")
 
         raise APIError(response.status_code, response.content.decode(errors="ignore"))
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "AsyncOffersClient":
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
         await self._http_client.aclose()
