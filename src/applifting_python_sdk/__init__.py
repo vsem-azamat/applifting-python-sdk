@@ -4,7 +4,7 @@ An SDK for the Applifting Offers microservice.
 
 __version__ = "0.1.0"
 
-from .client import AsyncOffersClient
+from .client import AsyncOffersClient, OffersClient
 from .exceptions import (
     APIError,
     AppliftingSDKError,
@@ -21,6 +21,7 @@ from .models import (
 
 __all__ = [
     "AsyncOffersClient",
+    "OffersClient",
     "AppliftingSDKError",
     "AuthenticationError",
     "ProductAlreadyExists",

@@ -1,6 +1,6 @@
 import asyncio
 import time
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator, Sequence
 from types import TracebackType
 from typing import Any, cast
 from uuid import UUID
@@ -171,7 +171,7 @@ class AsyncOffersClient:
         )
 
         if response.status_code == 200 and response.parsed:
-            offer_responses = cast(list[OfferResponse], response.parsed)
+            offer_responses = cast(Sequence[OfferResponse], response.parsed)
             return [Offer.from_offer_response(o) for o in offer_responses]
         if response.status_code == 404:
             raise ProductNotFound(response.status_code, f"Product with ID '{product_id}' not found.")
@@ -185,3 +185,84 @@ class AsyncOffersClient:
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         await self._http_client.aclose()
+
+
+class OffersClient:
+    """High-level sync client for the Applifting Offers API."""
+
+    def __init__(
+        self, refresh_token: str, base_url: str = "https://python.exercise.applifting.cz", **httpx_args: Any
+    ) -> None:
+        if not refresh_token:
+            raise ValueError("A refresh_token must be provided.")
+
+        auth_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
+        # The existing TokenManager uses asyncio.run internally for its sync methods, which is acceptable here.
+        self._token_manager = TokenManager(refresh_token=refresh_token, client=auth_client)
+
+        self._generated_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
+        transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=3))
+        auth = BearerAuth(self._token_manager)
+
+        self._http_client = httpx.Client(base_url=base_url, auth=auth, transport=transport, **httpx_args)
+        self._generated_client.set_httpx_client(self._http_client)
+
+    def register_product(self, product: Product) -> UUID:
+        """
+        Registers a new product.
+
+        Args:
+            product: A `Product` object containing the details of the product to register.
+
+        Returns:
+            The UUID of the newly registered product.
+
+        Raises:
+            ProductAlreadyExists: If a product with the same ID is already registered.
+            APIError: For other unexpected API errors.
+        """
+        response = register_product_api_v1_products_register_post.sync_detailed(
+            client=self._generated_client, body=product.to_register_request()
+        )
+
+        if response.status_code == 201 and response.parsed:
+            parsed_response = cast(RegisterProductResponse, response.parsed)
+            return parsed_response.id
+        if response.status_code == 409:
+            raise ProductAlreadyExists(response.status_code, f"Product with ID '{product.id}' already exists.")
+
+        raise APIError(response.status_code, response.content.decode(errors="ignore"))
+
+    def get_offers(self, product_id: UUID) -> list[Offer]:
+        """
+        Retrieves all offers for a specific product.
+
+        Args:
+            product_id: The UUID of the product to retrieve offers for.
+
+        Returns:
+            A list of `Offer` objects.
+
+        Raises:
+            ProductNotFound: If no product with the given ID is found.
+            APIError: For other unexpected API errors.
+        """
+        response = get_offers_api_v1_products_product_id_offers_get.sync_detailed(
+            client=self._generated_client, product_id=product_id
+        )
+
+        if response.status_code == 200 and response.parsed:
+            offer_responses = cast(Sequence[OfferResponse], response.parsed)
+            return [Offer.from_offer_response(o) for o in offer_responses]
+        if response.status_code == 404:
+            raise ProductNotFound(response.status_code, f"Product with ID '{product_id}' not found.")
+
+        raise APIError(response.status_code, response.content.decode(errors="ignore"))
+
+    def __enter__(self) -> "OffersClient":
+        return self
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
+        self._http_client.close()

@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import os
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
-from applifting_python_sdk import AsyncOffersClient
+from applifting_python_sdk import AsyncOffersClient, OffersClient
 
 
 def _load_dotenv() -> None:
@@ -51,8 +51,15 @@ def refresh_token() -> str:
     return os.getenv("APPLIFTING_REFRESH_TOKEN", "refresh")
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture()
 async def async_offers_client(base_url: str, refresh_token: str) -> AsyncGenerator[AsyncOffersClient, None]:
     """Provides an initialized AsyncOffersClient instance that is properly closed."""
     async with AsyncOffersClient(refresh_token=refresh_token, base_url=base_url) as client:
+        yield client
+
+
+@pytest.fixture()
+def offers_client(base_url: str, refresh_token: str) -> Generator[OffersClient, None, None]:
+    """Provides an initialized OffersClient instance that is properly closed."""
+    with OffersClient(refresh_token=refresh_token, base_url=base_url) as client:
         yield client
