@@ -6,7 +6,6 @@ from ._generated.python_exercise_client.models.offer_response import OfferRespon
 from ._generated.python_exercise_client.models.register_product_request import RegisterProductRequest
 from ._generated.python_exercise_client.models.register_product_response import RegisterProductResponse
 
-# It tells the linter that these names are being intentionally exported.
 __all__ = [
     "Offer",
     "Product",
@@ -20,9 +19,9 @@ class Product:
     """A product to register with the Applifting Offers API."""
 
     def __init__(self, name: str, description: str, id: UUID | None = None):
+        self.id = id or uuid4()
         self.name = name
         self.description = description
-        self.id = id or uuid4()
 
     def to_register_request(self) -> RegisterProductRequest:
         """Convert to the generated model for API calls."""
