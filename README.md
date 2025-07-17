@@ -74,6 +74,30 @@ if __name__ == "__main__":
 
 For detailed, runnable scripts, including a synchronous example, see the `examples/` directory.
 
+### 3. Using the CLI
+
+If you prefer a quick test from your terminal, the SDK ships with a standalone
+command‑line interface (CLI). After installation the `applifting-sdk` command
+is available on your `$PATH`.
+
+```bash
+# Register a new product
+applifting-sdk register-product \
+  --name "CLI Widget" \
+  --description "A widget registered from the CLI"
+
+# Fetch offers for a product (replace with the real UUID)
+applifting-sdk get-offers 123e4567-e89b-12d3-a456-426614174000
+```
+
+The `--refresh-token/-t` option can be used to override the `APPLIFTING_REFRESH_TOKEN`
+environment variable if needed. When the environment variable is set, you don't
+need to pass the token explicitly. Run `applifting-sdk --help` or `applifting-sdk
+<command> --help` for the full reference.
+
+You can find a ready‑to‑run script demonstrating the above commands in
+`examples/cli_usage.sh`.
+
 ## Project Structure
 
 The repository is organized into several key directories:
@@ -83,6 +107,7 @@ The repository is organized into several key directories:
     -   `client.py`: The high-level `OffersClient` and `AsyncOffersClient` that provide the user-facing interface.
     -   `models.py`: User-friendly data models (`Product`, `Offer`).
     -   `exceptions.py`: Custom exception classes for error handling.
+    -   `cli.py`: Command-line interface for interacting with the API from the terminal.
 -   `tests`: The test suite, using `pytest` and `respx` for mocking API calls.
 -   `examples`: Runnable scripts demonstrating how to use both the synchronous and asynchronous clients.
 

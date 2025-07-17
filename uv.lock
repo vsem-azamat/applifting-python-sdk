@@ -32,6 +32,7 @@ source = { editable = "." }
 dependencies = [
     { name = "attrs" },
     { name = "httpx" },
+    { name = "typer" },
 ]
 
 [package.dev-dependencies]
@@ -43,13 +44,13 @@ dev = [
     { name = "pytest-asyncio" },
     { name = "respx" },
     { name = "ruff" },
-    { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "attrs", specifier = ">=23.2.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "typer", specifier = ">=0.16.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -61,7 +62,6 @@ dev = [
     { name = "pytest-asyncio", specifier = ">=1.0.0" },
     { name = "respx", specifier = ">=0.22.0" },
     { name = "ruff", specifier = ">=0.12.3" },
-    { name = "typer", specifier = ">=0.16.0" },
 ]
 
 [[package]]
