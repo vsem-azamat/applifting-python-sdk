@@ -124,6 +124,23 @@ source .venv/bin/activate
 uv sync --dev
 ```
 
+### Development Commands
+
+We provide a Makefile for common development tasks:
+
+```bash
+make help              # Show all available commands
+make dev-install       # Install package and dev dependencies
+make test              # Run tests
+make test-cov          # Run tests with coverage report
+make lint              # Run linting
+make format            # Format code
+make type-check        # Run type checking
+make ci                # Run all CI checks
+make build             # Build package
+make clean             # Clean build artifacts
+```
+
 ### Running Tests
 
 The test suite ensures the reliability of the SDK. Before running tests, copy the example environment file and add your refresh token.
@@ -136,8 +153,29 @@ cp .env.example .env
 Then, run `pytest`:
 
 ```bash
+make test
+# or directly:
 uv run pytest
 ```
+
+### Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality. Install them with:
+
+```bash
+make pre-commit-install
+```
+
+### CI/CD
+The project includes GitHub Actions workflows for:
+
+- **Continuous Integration** – runs linting, type checking, tests, and coverage on pushes & PRs targeting `dev` and `main`.
+- **Release** – on tags matching `v*`, verifies the tag matches `pyproject.toml` version, builds the distribution, and publishes to TestPyPI (configure secrets to publish to real PyPI).
+- **Dev → Main PR automation** – when you push to `dev`, a pull request from `dev` to `main` is (created if missing) or left alone if already open. Review the PR, ensure CI is green, then merge via the GitHub UI. Enable GitHub auto‑merge if you want the merge to happen automatically after checks pass.
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ---
 This SDK was created as a solution to the Applifting Python task.
