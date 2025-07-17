@@ -74,6 +74,30 @@ if __name__ == "__main__":
 
 For detailed, runnable scripts, including a synchronous example, see the `examples/` directory.
 
+### 3. Using the CLI
+
+If you prefer a quick test from your terminal, the SDK ships with a standalone
+command‑line interface (CLI). After installation the `applifting-sdk` command
+is available on your `$PATH`.
+
+```bash
+# Register a new product
+applifting-sdk register-product \
+  --name "CLI Widget" \
+  --description "A widget registered from the CLI"
+
+# Fetch offers for a product (replace with the real UUID)
+applifting-sdk get-offers 123e4567-e89b-12d3-a456-426614174000
+```
+
+The `--refresh-token/-t` option can be used to override the `APPLIFTING_REFRESH_TOKEN`
+environment variable if needed. When the environment variable is set, you don't
+need to pass the token explicitly. Run `applifting-sdk --help` or `applifting-sdk
+<command> --help` for the full reference.
+
+You can find a ready‑to‑run script demonstrating the above commands in
+`examples/cli_usage.sh`.
+
 ## Project Structure
 
 The repository is organized into several key directories:
@@ -83,6 +107,7 @@ The repository is organized into several key directories:
     -   `client.py`: The high-level `OffersClient` and `AsyncOffersClient` that provide the user-facing interface.
     -   `models.py`: User-friendly data models (`Product`, `Offer`).
     -   `exceptions.py`: Custom exception classes for error handling.
+    -   `cli.py`: Command-line interface for interacting with the API from the terminal.
 -   `tests`: The test suite, using `pytest` and `respx` for mocking API calls.
 -   `examples`: Runnable scripts demonstrating how to use both the synchronous and asynchronous clients.
 
@@ -99,6 +124,23 @@ source .venv/bin/activate
 uv sync --dev
 ```
 
+### Development Commands
+
+We provide a Makefile for common development tasks:
+
+```bash
+make help              # Show all available commands
+make dev-install       # Install package and dev dependencies
+make test              # Run tests
+make test-cov          # Run tests with coverage report
+make lint              # Run linting
+make format            # Format code
+make type-check        # Run type checking
+make ci                # Run all CI checks
+make build             # Build package
+make clean             # Clean build artifacts
+```
+
 ### Running Tests
 
 The test suite ensures the reliability of the SDK. Before running tests, copy the example environment file and add your refresh token.
@@ -111,8 +153,29 @@ cp .env.example .env
 Then, run `pytest`:
 
 ```bash
+make test
+# or directly:
 uv run pytest
 ```
+
+### Pre-commit Hooks
+
+We use pre-commit hooks to ensure code quality. Install them with:
+
+```bash
+make pre-commit-install
+```
+
+### CI/CD
+The project includes GitHub Actions workflows for:
+
+- **Continuous Integration** – runs linting, type checking, tests, and coverage on pushes & PRs targeting `dev` and `main`.
+- **Release** – on tags matching `v*`, verifies the tag matches `pyproject.toml` version, builds the distribution, and publishes to TestPyPI (configure secrets to publish to real PyPI).
+- **Dev → Main PR automation** – when you push to `dev`, a pull request from `dev` to `main` is (created if missing) or left alone if already open. Review the PR, ensure CI is green, then merge via the GitHub UI. Enable GitHub auto‑merge if you want the merge to happen automatically after checks pass.
+
+## Contributing
+
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ---
 This SDK was created as a solution to the Applifting Python task.

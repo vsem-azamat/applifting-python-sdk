@@ -20,11 +20,15 @@ repos:
     hooks:
     -   id: mypy
         files: \.py$
-        args: [--strict]
+        args: [--strict, --python-executable, python]
         additional_dependencies: [
             "attrs>=23.2.0",
             "httpx>=0.28.1",
             "respx>=0.22.0",
             "pytest>=8.4.1",
             "pytest-asyncio>=1.0.0",
+            "typer>=0.16.0",
         ]
+        pass_filenames: false
+        always_run: true
+        entry: mypy --strict src/applifting_python_sdk tests

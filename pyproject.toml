@@ -10,7 +10,11 @@ requires-python = ">=3.12"
 dependencies = [
     "httpx>=0.28.1",
     "attrs>=23.2.0",
+    "typer>=0.16.0",
 ]
+
+[project.scripts]
+applifting-sdk = "applifting_python_sdk.cli:app"
 
 [build-system]
 requires = ["hatchling"]
@@ -59,8 +63,8 @@ dev = [
     "mypy>=1.16.1",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
+    "pytest-cov>=4.0.0",
     "respx>=0.22.0",
     "ruff>=0.12.3",
-    "typer>=0.16.0",
     "pre-commit>=4.2.0",
 ]
