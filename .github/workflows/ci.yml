@@ -56,7 +56,7 @@ jobs:
           uv run ruff format --check .
 
       - name: Run type checking
-        run: uv run mypy
+        run: uv run mypy --strict src/applifting_python_sdk tests
 
       - name: Run tests
         run: uv run pytest tests/ -v --cov=src/applifting_python_sdk --cov-report=xml
