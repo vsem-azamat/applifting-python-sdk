@@ -13,6 +13,7 @@ permissions:
 env:
   BASE_URL: https://python.exercise.applifting.cz
   APPLIFTING_REFRESH_TOKEN: ${{ secrets.APPLIFTING_REFRESH_TOKEN }}
+  NO_COLOR: 1  # Disable colors in CI to avoid ANSI escape codes in test output
 
 jobs:
   test:
