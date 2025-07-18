@@ -1,0 +1,49 @@
+name: Auto PR dev → main
+
+on:
+  push:
+    branches:
+      - dev
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  NO_COLOR: 1  # Disable colors in CI for consistent output
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt update \
+          && sudo apt install gh -y
+
+      - name: Open or update PR from dev to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # If an open PR from dev->main exists, do nothing.
+          if gh pr list --base main --head dev --state open --json number --jq '.[0].number' >/dev/null 2>&1; then
+            echo "PR from dev to main already exists. Skipping creation."
+            exit 0
+          fi
+
+          # Create a PR. Reviewers can enable auto-merge in the UI if desired.
+          gh pr create \
+            --base main \
+            --head dev \
+            --title "Auto PR: dev → main" \
+            --body "This pull request was automatically created when commits were pushed to \`dev\`. Please review, wait for CI to pass, and merge when ready."

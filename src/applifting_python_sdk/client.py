@@ -1,8 +1,9 @@
 import asyncio
 import time
 from collections.abc import AsyncGenerator, Generator, Sequence
+from http import HTTPStatus
 from types import TracebackType
-from typing import Any, cast
+from typing import Any, TypeVar, cast
 from uuid import UUID
 
 import httpx
@@ -19,8 +20,16 @@ from ._generated.python_exercise_client.models import (
     OfferResponse,
     RegisterProductResponse,
 )
+from .constants import (
+    API_BASE_URL_DEFAULT,
+    DEFAULT_RETRIES,
+    TOKEN_TTL_SECONDS_DEFAULT,
+)
 from .exceptions import APIError, ProductAlreadyExists, ProductNotFound
 from .models import Offer, Product
+
+# Type variable used to specialise _BaseClient for sync or async back-ends.
+ClientT = TypeVar("ClientT")
 
 
 class BearerAuth(httpx.Auth):
@@ -29,39 +38,35 @@ class BearerAuth(httpx.Auth):
     def __init__(self, token_manager: "TokenManager"):
         self._token_manager = token_manager
 
+    def _set_auth_header(self, request: httpx.Request, token: str) -> None:
+        """Sets the Authorization header with the provided Bearer token."""
+        request.headers["Authorization"] = f"Bearer {token}"
+
     def auth_flow(self, request: httpx.Request) -> Generator[httpx.Request, httpx.Response, None]:
-        # This sync version is not used by the async client but is here for completeness.
-        # It would require a separate sync TokenManager implementation to be fully functional without asyncio.run.
-        access_token = self._token_manager.get_access_token()
-        request.headers["Authorization"] = f"Bearer {access_token}"
+        self._set_auth_header(request, self._token_manager.get_access_token())
         response = yield request
 
-        if response.status_code == 401:
-            new_access_token = self._token_manager.refresh_access_token()
-            request.headers["Authorization"] = f"Bearer {new_access_token}"
+        if response.status_code == HTTPStatus.UNAUTHORIZED:
+            self._set_auth_header(request, self._token_manager.refresh_access_token())
             yield request
 
     async def async_auth_flow(self, request: httpx.Request) -> AsyncGenerator[httpx.Request, httpx.Response]:
-        access_token = await self._token_manager.async_get_access_token()
-        request.headers["Authorization"] = f"Bearer {access_token}"
+        self._set_auth_header(request, await self._token_manager.async_get_access_token())
         response = yield request
 
-        if response.status_code == 401:
+        if response.status_code == HTTPStatus.UNAUTHORIZED:
             # Token expired or invalid, force a refresh and retry the request
-            new_access_token = await self._token_manager.async_refresh_access_token()
-            request.headers["Authorization"] = f"Bearer {new_access_token}"
+            self._set_auth_header(request, await self._token_manager.async_refresh_access_token())
             yield request
 
 
 class TokenManager:
     """Manages retrieving and caching the access token."""
 
-    # Tokens expire in 5 minutes (300 seconds). We'll refresh them after 270 seconds (4.5 minutes) to be safe.
-    _TOKEN_TTL_SECONDS = 270
-
-    def __init__(self, refresh_token: str, client: GeneratedClient):
+    def __init__(self, refresh_token: str, client: GeneratedClient, token_ttl_seconds: int):
         self._refresh_token = refresh_token
         self._client = client
+        self._token_ttl_seconds = token_ttl_seconds
         self._access_token: str | None = None
         self._expires_at: float = 0
         self._lock = asyncio.Lock()
@@ -93,10 +98,10 @@ class TokenManager:
         except Exception as e:
             raise exceptions.AuthenticationError(f"Failed to connect to authentication service: {e}") from e
 
-        if response.status_code == 201 and response.parsed:
+        if response.status_code == HTTPStatus.CREATED and response.parsed:
             parsed = cast(AuthResponse, response.parsed)
             self._access_token = parsed.access_token
-            self._expires_at = time.monotonic() + self._TOKEN_TTL_SECONDS
+            self._expires_at = time.monotonic() + self._token_ttl_seconds
             return self._access_token
 
         raise exceptions.AuthenticationError(
@@ -105,78 +110,79 @@ class TokenManager:
         )
 
 
-class AsyncOffersClient:
-    """High-level async client for the Applifting Offers API."""
+class _BaseClient[ClientT]:
+    """Shared logic between the sync and async facade clients."""
+
+    _http_client: ClientT
 
     def __init__(
-        self, refresh_token: str, base_url: str = "https://python.exercise.applifting.cz", **httpx_args: Any
+        self,
+        refresh_token: str,
+        base_url: str = API_BASE_URL_DEFAULT,
+        token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
     ) -> None:
         if not refresh_token:
             raise ValueError("A refresh_token must be provided.")
 
         auth_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
-        self._token_manager = TokenManager(refresh_token=refresh_token, client=auth_client)
-
-        self._generated_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
-        transport = httpx_args.pop("transport", httpx.AsyncHTTPTransport(retries=3))
-        auth = BearerAuth(self._token_manager)
-
-        self._http_client = httpx.AsyncClient(base_url=base_url, auth=auth, transport=transport, **httpx_args)
-        # This is the crucial step to link our httpx client with the auto-refresh auth
-        # to the low-level generated client.
-        self._generated_client.set_async_httpx_client(self._http_client)
-
-    async def register_product(self, product: Product) -> UUID:
-        """
-        Registers a new product.
-
-        Args:
-            product: A `Product` object containing the details of the product to register.
-
-        Returns:
-            The UUID of the newly registered product.
-
-        Raises:
-            ProductAlreadyExists: If a product with the same ID is already registered.
-            APIError: For other unexpected API errors.
-        """
-        response = await register_product_api_v1_products_register_post.asyncio_detailed(
-            client=self._generated_client, body=product.to_register_request()
+        self._token_manager = TokenManager(
+            refresh_token=refresh_token, client=auth_client, token_ttl_seconds=token_ttl_seconds
         )
 
-        if response.status_code == 201 and response.parsed:
+        self._generated_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
+        self._auth = BearerAuth(self._token_manager)
+
+    def _handle_register_product_response(self, response: Any, product_id: UUID) -> UUID:
+        if response.status_code == HTTPStatus.CREATED and response.parsed:
             parsed_response = cast(RegisterProductResponse, response.parsed)
             return parsed_response.id
-        if response.status_code == 409:
-            raise ProductAlreadyExists(response.status_code, f"Product with ID '{product.id}' already exists.")
+        if response.status_code == HTTPStatus.CONFLICT:
+            raise ProductAlreadyExists(response.status_code, f"Product with ID '{product_id}' already exists.")
 
         raise APIError(response.status_code, response.content.decode(errors="ignore"))
 
-    async def get_offers(self, product_id: UUID) -> list[Offer]:
-        """
-        Retrieves all offers for a specific product.
-
-        Args:
-            product_id: The UUID of the product to retrieve offers for.
-
-        Returns:
-            A list of `Offer` objects.
-
-        Raises:
-            ProductNotFound: If no product with the given ID is found.
-            APIError: For other unexpected API errors.
-        """
-        response = await get_offers_api_v1_products_product_id_offers_get.asyncio_detailed(
-            client=self._generated_client, product_id=product_id
-        )
-
-        if response.status_code == 200 and response.parsed:
+    def _handle_get_offers_response(self, response: Any, product_id: UUID) -> list[Offer]:
+        if response.status_code == HTTPStatus.OK and response.parsed:
             offer_responses = cast(Sequence[OfferResponse], response.parsed)
             return [Offer.from_offer_response(o) for o in offer_responses]
-        if response.status_code == 404:
+        if response.status_code == HTTPStatus.NOT_FOUND:
             raise ProductNotFound(response.status_code, f"Product with ID '{product_id}' not found.")
 
         raise APIError(response.status_code, response.content.decode(errors="ignore"))
+
+
+class AsyncOffersClient(_BaseClient[httpx.AsyncClient]):
+    """High-level async client for the Applifting Offers API."""
+
+    _http_client: httpx.AsyncClient
+
+    def __init__(
+        self,
+        refresh_token: str,
+        base_url: str = API_BASE_URL_DEFAULT,
+        retries: int = DEFAULT_RETRIES,
+        token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        **httpx_args: Any,
+    ) -> None:
+        super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
+        transport = httpx_args.pop("transport", httpx.AsyncHTTPTransport(retries=retries))
+
+        self._http_client = httpx.AsyncClient(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
+        self._generated_client.set_async_httpx_client(self._http_client)
+
+    async def register_product(self, product: Product) -> UUID:
+        """Registers a new product."""
+        response = await register_product_api_v1_products_register_post.asyncio_detailed(
+            client=self._generated_client, body=product.to_register_request()
+        )
+        return self._handle_register_product_response(response, product.id)
+
+    async def get_offers(self, product_id: UUID) -> list[Offer]:
+        """Retrieves all offers for a specific product."""
+        response = await get_offers_api_v1_products_product_id_offers_get.asyncio_detailed(
+            client=self._generated_client, product_id=product_id
+        )
+        return self._handle_get_offers_response(response, product_id)
 
     async def __aenter__(self) -> "AsyncOffersClient":
         return self
@@ -187,24 +193,23 @@ class AsyncOffersClient:
         await self._http_client.aclose()
 
 
-class OffersClient:
+class OffersClient(_BaseClient[httpx.Client]):
     """High-level sync client for the Applifting Offers API."""
 
+    _http_client: httpx.Client
+
     def __init__(
-        self, refresh_token: str, base_url: str = "https://python.exercise.applifting.cz", **httpx_args: Any
+        self,
+        refresh_token: str,
+        base_url: str = API_BASE_URL_DEFAULT,
+        retries: int = DEFAULT_RETRIES,
+        token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        **httpx_args: Any,
     ) -> None:
-        if not refresh_token:
-            raise ValueError("A refresh_token must be provided.")
+        super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
+        transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=retries))
 
-        auth_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
-        # The existing TokenManager uses asyncio.run internally for its sync methods, which is acceptable here.
-        self._token_manager = TokenManager(refresh_token=refresh_token, client=auth_client)
-
-        self._generated_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
-        transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=3))
-        auth = BearerAuth(self._token_manager)
-
-        self._http_client = httpx.Client(base_url=base_url, auth=auth, transport=transport, **httpx_args)
+        self._http_client = httpx.Client(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
         self._generated_client.set_httpx_client(self._http_client)
 
     def register_product(self, product: Product) -> UUID:
@@ -224,14 +229,7 @@ class OffersClient:
         response = register_product_api_v1_products_register_post.sync_detailed(
             client=self._generated_client, body=product.to_register_request()
         )
-
-        if response.status_code == 201 and response.parsed:
-            parsed_response = cast(RegisterProductResponse, response.parsed)
-            return parsed_response.id
-        if response.status_code == 409:
-            raise ProductAlreadyExists(response.status_code, f"Product with ID '{product.id}' already exists.")
-
-        raise APIError(response.status_code, response.content.decode(errors="ignore"))
+        return self._handle_register_product_response(response, product.id)
 
     def get_offers(self, product_id: UUID) -> list[Offer]:
         """
@@ -250,14 +248,7 @@ class OffersClient:
         response = get_offers_api_v1_products_product_id_offers_get.sync_detailed(
             client=self._generated_client, product_id=product_id
         )
-
-        if response.status_code == 200 and response.parsed:
-            offer_responses = cast(Sequence[OfferResponse], response.parsed)
-            return [Offer.from_offer_response(o) for o in offer_responses]
-        if response.status_code == 404:
-            raise ProductNotFound(response.status_code, f"Product with ID '{product_id}' not found.")
-
-        raise APIError(response.status_code, response.content.decode(errors="ignore"))
+        return self._handle_get_offers_response(response, product_id)
 
     def __enter__(self) -> "OffersClient":
         return self
