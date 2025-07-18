@@ -1,6 +1,6 @@
 [project]
 name = "applifting-python-sdk"
-version = "0.1.0"
+version = "0.1.1"
 description = "A Python SDK for the Applifting Offers microservice API."
 readme = "README.md"
 authors = [
