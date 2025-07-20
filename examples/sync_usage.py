@@ -36,7 +36,8 @@ def main() -> None:
 
     # The client can be used as a context manager, which handles cleanup.
     # This uses the default httpx HTTP backend.
-    with OffersClient(refresh_token=refresh_token) as client:
+    # We can also configure the cache TTL for offer data (default is 60s).
+    with OffersClient(refresh_token=refresh_token, offers_ttl_seconds=120) as client:
         product = Product(
             id=uuid4(),
             name="Super Sync Widget",
