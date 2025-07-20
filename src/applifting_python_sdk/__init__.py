@@ -12,6 +12,7 @@ from .exceptions import (
     ProductAlreadyExists,
     ProductNotFound,
 )
+from .hooks import AsyncHook, SyncHook
 from .models import (
     Offer,
     Product,
@@ -31,4 +32,6 @@ __all__ = [
     "Product",
     "RegisterProductRequest",
     "RegisterProductResponse",
+    "AsyncHook",
+    "SyncHook",
 ]

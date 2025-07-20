@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import time
+from unittest.mock import MagicMock
 from uuid import UUID, uuid4
 
 import httpx
 import pytest
 import respx
 
-from applifting_python_sdk import OffersClient
+from applifting_python_sdk import OffersClient, SyncHook
 from applifting_python_sdk.exceptions import APIError, ProductAlreadyExists, ProductNotFound
 from applifting_python_sdk.models import Product
 
@@ -193,3 +194,42 @@ def test_get_offers_cache_expiration(respx_mock: respx.MockRouter, base_url: str
         # Second call - should hit the API again
         client.get_offers(product_id)
         assert offers_route.call_count == 2
+
+
+# --------------------------------------------------------------------------- #
+# Hooks                                                                       #
+# --------------------------------------------------------------------------- #
+
+
+def test_sync_client_with_httpx_hooks(respx_mock: respx.MockRouter, base_url: str, refresh_token: str) -> None:
+    """Ensure that httpx hooks are correctly called for the sync client."""
+    # Create a mock hook
+    mock_hook = MagicMock(spec=SyncHook)
+
+    with OffersClient(
+        refresh_token=refresh_token, base_url=base_url, http_backend="httpx", hooks=[mock_hook]
+    ) as client:
+        # Mock API calls
+        respx_mock.post(f"{base_url}/api/v1/auth").mock(
+            return_value=httpx.Response(201, json={"access_token": "token"})
+        )
+        product_id = uuid4()
+        respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
+            return_value=httpx.Response(200, json=[])
+        )
+
+        # Make a request to trigger the hooks
+        client.get_offers(product_id)
+
+    # Assert that the hook methods were called
+    mock_hook.on_request.assert_called_once()
+    mock_hook.on_response.assert_called_once()
+
+    # Verify the arguments passed to the hooks
+    request_call = mock_hook.on_request.call_args
+    assert "request" in request_call.kwargs
+    assert isinstance(request_call.kwargs["request"], httpx.Request)
+
+    response_call = mock_hook.on_response.call_args
+    assert "response" in response_call.kwargs
+    assert isinstance(response_call.kwargs["response"], httpx.Response)

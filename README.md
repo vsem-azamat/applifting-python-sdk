@@ -94,6 +94,34 @@ client = OffersClient(
 )
 ```
 
+### Middleware Hooks
+
+The SDK supports middleware hooks, allowing you to inspect or modify requests and responses. This is useful for implementing custom logging, metrics, or header manipulation.
+
+To create a hook, define a class that implements the `SyncHook` or `AsyncHook` protocol and pass an instance of it to the client.
+
+Here is an example of a simple logging hook:
+
+```python
+import httpx
+from applifting_python_sdk import OffersClient, SyncHook
+
+class LoggingHook(SyncHook):
+    def on_request(self, *, request: httpx.Request) -> None:
+        print(f">>> Request: {request.method} {request.url}")
+
+    def on_response(self, *, response: httpx.Response) -> None:
+        print(f"<<< Response: {response.status_code}")
+
+# Initialize the client with the hook
+client = OffersClient(
+    refresh_token="your-token",
+    hooks=[LoggingHook()],
+)
+
+# Now, all requests made with this client will be logged.
+```
+
 ### 3. Using the CLI
 
 If you prefer a quick test from your terminal, the SDK ships with a standalone

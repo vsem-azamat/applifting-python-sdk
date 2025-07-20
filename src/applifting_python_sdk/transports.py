@@ -10,6 +10,7 @@ The approach follows the pattern used in the official openai‑python SDK.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 import httpx
@@ -17,6 +18,8 @@ import httpx
 if TYPE_CHECKING:
     import aiohttp
     import requests
+
+    from .hooks import AsyncHook, SyncHook
 else:
     # For runtime, these might be None if not installed
     try:
@@ -37,10 +40,11 @@ else:
 class RequestsTransport(httpx.BaseTransport):
     """An httpx transport that delegates requests to ``requests``."""
 
-    def __init__(self, **session_kwargs: Any) -> None:
+    def __init__(self, *, hooks: Sequence[SyncHook] | None = None, **session_kwargs: Any) -> None:
         if requests is None:  # pragma: no cover
             raise ImportError("`requests` is not installed. Run `pip install requests` to use this backend.")
 
+        self._hooks = hooks or []
         self._session_kwargs = session_kwargs
         self._session: requests.Session | None = None
 
@@ -52,6 +56,9 @@ class RequestsTransport(httpx.BaseTransport):
             self._session = requests.Session(**self._session_kwargs)
 
         import requests
+
+        for hook in self._hooks:
+            hook.on_request(request=request)
 
         prepared = self._session.prepare_request(
             requests.Request(
@@ -81,13 +88,18 @@ class RequestsTransport(httpx.BaseTransport):
                 raise httpx.TransportError(str(exc)) from exc
             raise httpx.TransportError(str(exc)) from exc
 
-        return httpx.Response(
+        response = httpx.Response(
             status_code=resp.status_code,
             headers=list(resp.headers.items()),
             content=resp.content,
             request=request,
             extensions={"http_version": b"HTTP/1.1"},
         )
+
+        for hook in self._hooks:
+            hook.on_response(response=response)
+
+        return response
 
     def close(self) -> None:
         if self._session is not None:  # pragma: no cover
@@ -103,10 +115,11 @@ class RequestsTransport(httpx.BaseTransport):
 class AioHTTPTransport(httpx.AsyncBaseTransport):
     """An httpx transport that delegates requests to ``aiohttp``."""
 
-    def __init__(self, **client_kwargs: Any) -> None:
+    def __init__(self, *, hooks: Sequence[AsyncHook] | None = None, **client_kwargs: Any) -> None:
         if aiohttp is None:  # pragma: no cover
             raise ImportError("`aiohttp` is not installed. Run `pip install aiohttp` to use this backend.")
 
+        self._hooks = hooks or []
         self._client_kwargs = client_kwargs
         self._session: aiohttp.ClientSession | None = None
 
@@ -115,6 +128,9 @@ class AioHTTPTransport(httpx.AsyncBaseTransport):
             import aiohttp
 
             self._session = aiohttp.ClientSession(**self._client_kwargs)
+
+        for hook in self._hooks:
+            await hook.on_request(request=request)
 
         # Extract query params – aiohttp wants them separate
         params: list[tuple[str, str]] = list(request.url.params.multi_items())
@@ -144,13 +160,18 @@ class AioHTTPTransport(httpx.AsyncBaseTransport):
                     f"HTTP/{resp.version.major}.{resp.version.minor}".encode() if resp.version else b"HTTP/1.1"
                 )
 
-            return httpx.Response(
+            response = httpx.Response(
                 status_code=resp.status,
                 headers=list(resp.headers.items()),
                 content=body,
                 request=request,
                 extensions={"http_version": http_version},
             )
+
+            for hook in self._hooks:
+                await hook.on_response(response=response)
+
+            return response
         except Exception as exc:
             # Convert aiohttp exceptions to httpx TransportError
             try:

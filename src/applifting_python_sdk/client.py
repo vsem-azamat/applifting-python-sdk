@@ -1,6 +1,6 @@
 import asyncio
 import time
-from collections.abc import AsyncGenerator, Generator, Sequence
+from collections.abc import AsyncGenerator, Callable, Generator, Sequence
 from http import HTTPStatus
 from types import TracebackType
 from typing import Any, Literal, TypeVar, cast
@@ -28,6 +28,7 @@ from .constants import (
     TOKEN_TTL_SECONDS_DEFAULT,
 )
 from .exceptions import APIError, ProductAlreadyExists, ProductNotFound
+from .hooks import AsyncHook, SyncHook
 from .models import Offer, Product
 from .transports import AioHTTPTransport, RequestsTransport
 
@@ -147,7 +148,7 @@ class _BaseClient[ClientT]:
         raise APIError(response.status_code, response.content.decode(errors="ignore"))
 
     def _handle_get_offers_response(self, response: Any, product_id: UUID) -> list[Offer]:
-        if response.status_code == HTTPStatus.OK and response.parsed:
+        if response.status_code == HTTPStatus.OK and response.parsed is not None:
             offer_responses = cast(Sequence[OfferResponse], response.parsed)
             return [Offer.from_offer_response(o) for o in offer_responses]
         if response.status_code == HTTPStatus.NOT_FOUND:
@@ -169,20 +170,33 @@ class AsyncOffersClient(_BaseClient[httpx.AsyncClient]):
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
         offers_ttl_seconds: int = OFFERS_TTL_SECONDS_DEFAULT,
         http_backend: Literal["httpx", "aiohttp"] = "httpx",
+        hooks: Sequence[AsyncHook] | None = None,
         **httpx_args: Any,
     ) -> None:
         super().__init__(
             refresh_token, base_url, token_ttl_seconds=token_ttl_seconds, offers_ttl_seconds=offers_ttl_seconds
         )
 
+        event_hooks: dict[str, list[Callable[..., Any]]] = {}
         if http_backend == "aiohttp":
-            transport = httpx_args.pop("transport", AioHTTPTransport())
+            transport = httpx_args.pop("transport", AioHTTPTransport(hooks=hooks))
         elif http_backend == "httpx":
             transport = httpx_args.pop("transport", httpx.AsyncHTTPTransport(retries=retries))
+            if hooks:
+                # Convert hooks to httpx event hook format
+                event_hooks["request"] = [
+                    lambda request, hook=hook: asyncio.create_task(hook.on_request(request=request)) for hook in hooks
+                ]
+                event_hooks["response"] = [
+                    lambda response, hook=hook: asyncio.create_task(hook.on_response(response=response))
+                    for hook in hooks
+                ]
         else:  # pragma: no cover
             raise ValueError("AsyncOffersClient supports only 'httpx' or 'aiohttp' backends.")
 
-        self._http_client = httpx.AsyncClient(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
+        self._http_client = httpx.AsyncClient(
+            base_url=base_url, auth=self._auth, transport=transport, event_hooks=event_hooks, **httpx_args
+        )
         self._generated_client.set_async_httpx_client(self._http_client)
 
     async def register_product(self, product: Product) -> UUID:
@@ -230,20 +244,30 @@ class OffersClient(_BaseClient[httpx.Client]):
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
         offers_ttl_seconds: int = OFFERS_TTL_SECONDS_DEFAULT,
         http_backend: Literal["httpx", "requests"] = "httpx",
+        hooks: Sequence[SyncHook] | None = None,
         **httpx_args: Any,
     ) -> None:
         super().__init__(
             refresh_token, base_url, token_ttl_seconds=token_ttl_seconds, offers_ttl_seconds=offers_ttl_seconds
         )
 
+        event_hooks: dict[str, list[Callable[..., Any]]] = {}
         if http_backend == "requests":
-            transport = httpx_args.pop("transport", RequestsTransport())
+            transport = httpx_args.pop("transport", RequestsTransport(hooks=hooks))
         elif http_backend == "httpx":
             transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=retries))
+            if hooks:
+                # Convert hooks to httpx event hook format
+                event_hooks["request"] = [lambda request, hook=hook: hook.on_request(request=request) for hook in hooks]
+                event_hooks["response"] = [
+                    lambda response, hook=hook: hook.on_response(response=response) for hook in hooks
+                ]
         else:  # pragma: no cover
             raise ValueError("OffersClient supports only 'httpx' or 'requests' backends.")
 
-        self._http_client = httpx.Client(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
+        self._http_client = httpx.Client(
+            base_url=base_url, auth=self._auth, transport=transport, event_hooks=event_hooks, **httpx_args
+        )
         self._generated_client.set_httpx_client(self._http_client)
 
     def register_product(self, product: Product) -> UUID:
