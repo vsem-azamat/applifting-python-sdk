@@ -132,3 +132,64 @@ def test_authentication_flow(respx_mock: respx.MockRouter, base_url: str, offers
     second_auth = offers_route.calls[1].request.headers["Authorization"]
     assert first_auth == "Bearer oldtoken"
     assert second_auth == "Bearer newtoken"
+
+
+# --------------------------------------------------------------------------- #
+# Caching                                                                     #
+# --------------------------------------------------------------------------- #
+
+
+def test_get_offers_caching(respx_mock: respx.MockRouter, base_url: str, refresh_token: str) -> None:
+    """Calling get_offers twice for the same product should only hit the API once."""
+    # Use a client with a long TTL to ensure cache is used
+    with OffersClient(refresh_token=refresh_token, base_url=base_url, offers_ttl_seconds=60) as client:
+        respx_mock.post(f"{base_url}/api/v1/auth").mock(
+            return_value=httpx.Response(201, json={"access_token": "token"})
+        )
+        product_id = uuid4()
+        offer_id = uuid4()
+        offers_route = respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"id": str(offer_id), "price": 100, "items_in_stock": 5}],
+            )
+        )
+
+        # First call - should hit the API
+        offers1 = client.get_offers(product_id)
+        assert offers_route.call_count == 1
+        assert len(offers1) == 1
+
+        # Second call - should use the cache
+        offers2 = client.get_offers(product_id)
+        assert offers_route.call_count == 1  # No new API call
+        assert len(offers2) == 1
+        assert offers1[0].id == offers2[0].id
+
+
+def test_get_offers_cache_expiration(respx_mock: respx.MockRouter, base_url: str, refresh_token: str) -> None:
+    """After the TTL expires, get_offers should hit the API again."""
+    # Use a client with a short TTL
+    with OffersClient(refresh_token=refresh_token, base_url=base_url, offers_ttl_seconds=1) as client:
+        respx_mock.post(f"{base_url}/api/v1/auth").mock(
+            return_value=httpx.Response(201, json={"access_token": "token"})
+        )
+        product_id = uuid4()
+        offer_id = uuid4()
+        offers_route = respx_mock.get(f"{base_url}/api/v1/products/{product_id}/offers").mock(
+            return_value=httpx.Response(
+                200,
+                json=[{"id": str(offer_id), "price": 100, "items_in_stock": 5}],
+            )
+        )
+
+        # First call
+        client.get_offers(product_id)
+        assert offers_route.call_count == 1
+
+        # Wait for cache to expire
+        time.sleep(1.1)
+
+        # Second call - should hit the API again
+        client.get_offers(product_id)
+        assert offers_route.call_count == 2

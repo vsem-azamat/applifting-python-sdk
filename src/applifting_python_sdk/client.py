@@ -20,9 +20,11 @@ from ._generated.python_exercise_client.models import (
     OfferResponse,
     RegisterProductResponse,
 )
+from .cache import OfferCache
 from .constants import (
     API_BASE_URL_DEFAULT,
     DEFAULT_RETRIES,
+    OFFERS_TTL_SECONDS_DEFAULT,
     TOKEN_TTL_SECONDS_DEFAULT,
 )
 from .exceptions import APIError, ProductAlreadyExists, ProductNotFound
@@ -121,6 +123,7 @@ class _BaseClient[ClientT]:
         refresh_token: str,
         base_url: str = API_BASE_URL_DEFAULT,
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        offers_ttl_seconds: int = OFFERS_TTL_SECONDS_DEFAULT,
     ) -> None:
         if not refresh_token:
             raise ValueError("A refresh_token must be provided.")
@@ -129,6 +132,7 @@ class _BaseClient[ClientT]:
         self._token_manager = TokenManager(
             refresh_token=refresh_token, client=auth_client, token_ttl_seconds=token_ttl_seconds
         )
+        self._offer_cache = OfferCache(ttl_seconds=offers_ttl_seconds)
 
         self._generated_client = GeneratedClient(base_url=base_url, raise_on_unexpected_status=False)
         self._auth = BearerAuth(self._token_manager)
@@ -163,10 +167,13 @@ class AsyncOffersClient(_BaseClient[httpx.AsyncClient]):
         base_url: str = API_BASE_URL_DEFAULT,
         retries: int = DEFAULT_RETRIES,
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        offers_ttl_seconds: int = OFFERS_TTL_SECONDS_DEFAULT,
         http_backend: Literal["httpx", "aiohttp"] = "httpx",
         **httpx_args: Any,
     ) -> None:
-        super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
+        super().__init__(
+            refresh_token, base_url, token_ttl_seconds=token_ttl_seconds, offers_ttl_seconds=offers_ttl_seconds
+        )
 
         if http_backend == "aiohttp":
             transport = httpx_args.pop("transport", AioHTTPTransport())
@@ -187,10 +194,19 @@ class AsyncOffersClient(_BaseClient[httpx.AsyncClient]):
 
     async def get_offers(self, product_id: UUID) -> list[Offer]:
         """Retrieves all offers for a specific product."""
+        # Check cache first
+        cached_offers = await self._offer_cache.async_get(product_id)
+        if cached_offers is not None:
+            return cached_offers
+
+        # If not in cache, fetch from API
         response = await get_offers_api_v1_products_product_id_offers_get.asyncio_detailed(
             client=self._generated_client, product_id=product_id
         )
-        return self._handle_get_offers_response(response, product_id)
+        offers = self._handle_get_offers_response(response, product_id)
+
+        await self._offer_cache.async_set(product_id, offers)
+        return offers
 
     async def __aenter__(self) -> "AsyncOffersClient":
         return self
@@ -212,10 +228,13 @@ class OffersClient(_BaseClient[httpx.Client]):
         base_url: str = API_BASE_URL_DEFAULT,
         retries: int = DEFAULT_RETRIES,
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        offers_ttl_seconds: int = OFFERS_TTL_SECONDS_DEFAULT,
         http_backend: Literal["httpx", "requests"] = "httpx",
         **httpx_args: Any,
     ) -> None:
-        super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
+        super().__init__(
+            refresh_token, base_url, token_ttl_seconds=token_ttl_seconds, offers_ttl_seconds=offers_ttl_seconds
+        )
 
         if http_backend == "requests":
             transport = httpx_args.pop("transport", RequestsTransport())
@@ -260,10 +279,19 @@ class OffersClient(_BaseClient[httpx.Client]):
             ProductNotFound: If no product with the given ID is found.
             APIError: For other unexpected API errors.
         """
+        # Check cache first
+        cached_offers = self._offer_cache.get(product_id)
+        if cached_offers is not None:
+            return cached_offers
+
+        # If not in cache, fetch from API
         response = get_offers_api_v1_products_product_id_offers_get.sync_detailed(
             client=self._generated_client, product_id=product_id
         )
-        return self._handle_get_offers_response(response, product_id)
+        offers = self._handle_get_offers_response(response, product_id)
+
+        self._offer_cache.set(product_id, offers)
+        return offers
 
     def __enter__(self) -> "OffersClient":
         return self

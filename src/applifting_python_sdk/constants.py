@@ -31,5 +31,8 @@ TOKEN_TTL_SECONDS_DEFAULT = 270
 # How many automatic transport‑level retries httpx should perform
 DEFAULT_RETRIES = 3
 
+# Default TTL for the offers cache in seconds
+OFFERS_TTL_SECONDS_DEFAULT = 60
+
 # Sentinel header name used by internal helpers (kept here for completeness)
 AUTHORIZATION_HEADER = "Authorization"
