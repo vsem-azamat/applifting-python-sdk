@@ -1,8 +1,8 @@
 """
-A basic usage example for the sync Applifting Python SDK client.
+A basic usage example for the sync Applifting Python SDK client using the default HTTP backend.
 
 This script demonstrates how to:
-1. Initialize the OffersClient.
+1. Initialize the OffersClient with the default httpx backend.
 2. Create and register a new product.
 3. Retrieve offers for that product.
 
@@ -11,6 +11,9 @@ To run this example:
 2. Set your refresh token as an environment variable:
    export APPLIFTING_REFRESH_TOKEN="your-refresh-token-here"
 3. Run the script: `python examples/sync_usage.py`
+
+Note: If you get an error about "Cannot generate access token because another is valid",
+this is expected behavior when there's already an active token. Wait a few minutes and try again.
 """
 
 import os
@@ -26,12 +29,13 @@ from applifting_python_sdk.exceptions import AppliftingSDKError
 
 
 def main() -> None:
-    """A basic example of using the synchronous SDK client."""
+    """A basic example of using the synchronous SDK client with the default httpx backend."""
     refresh_token = os.getenv("APPLIFTING_REFRESH_TOKEN")
     if not refresh_token:
         raise ValueError("APPLIFTING_REFRESH_TOKEN environment variable not set.")
 
     # The client can be used as a context manager, which handles cleanup.
+    # This uses the default httpx HTTP backend.
     with OffersClient(refresh_token=refresh_token) as client:
         product = Product(
             id=uuid4(),
