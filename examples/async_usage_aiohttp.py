@@ -1,16 +1,17 @@
 """
-A basic usage example for the async Applifting Python SDK client using the default HTTP backend.
+An example of using the async client with the `aiohttp` HTTP backend.
 
 This script demonstrates how to:
-1. Initialize the AsyncOffersClient with the default httpx backend.
+1. Initialize the AsyncOffersClient with the `aiohttp` backend.
 2. Create and register a new product.
 3. Retrieve offers for that product.
 
 To run this example:
-1. Make sure you have the SDK installed (`pip install .` or `uv pip install .`).
+1. Make sure you have the SDK and `aiohttp` installed:
+   `uv pip install .[aiohttp]` or `pip install .[aiohttp]`
 2. Set your refresh token as an environment variable:
    export APPLIFTING_REFRESH_TOKEN="your-refresh-token-here"
-3. Run the script: `python examples/async_usage.py`
+3. Run the script: `python examples/async_usage_aiohttp.py`
 
 Note: If you get an error about "Cannot generate access token because another is valid",
 this is expected behavior when there's already an active token. Wait a few minutes and try again.
@@ -30,18 +31,18 @@ from applifting_python_sdk.exceptions import AppliftingSDKError
 
 
 async def main() -> None:
-    """A basic example of using the async SDK client with the default httpx backend."""
+    """An example of using the async SDK client with `aiohttp`."""
     refresh_token = os.getenv("APPLIFTING_REFRESH_TOKEN")
     if not refresh_token:
         raise ValueError("APPLIFTING_REFRESH_TOKEN environment variable not set.")
 
-    # The client can be used as an async context manager, which handles cleanup.
-    # This uses the default httpx HTTP backend.
-    async with AsyncOffersClient(refresh_token=refresh_token) as client:
+    # Initialize the client with the `aiohttp` backend.
+    # This requires the `aiohttp` extra to be installed.
+    async with AsyncOffersClient(refresh_token=refresh_token, http_backend="aiohttp") as client:
         product = Product(
             id=uuid4(),
-            name="Super Widget",
-            description="A high-quality widget for all your needs.",
+            name="Super Async Widget (via aiohttp)",
+            description="A high-quality widget registered via the aiohttp backend.",
         )
         print(f"Attempting to register product '{product.name}' with ID: {product.id}")
         try:

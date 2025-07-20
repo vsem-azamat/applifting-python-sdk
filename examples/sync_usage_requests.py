@@ -1,27 +1,27 @@
 """
-A basic usage example for the async Applifting Python SDK client using the default HTTP backend.
+An example of using the sync client with the `requests` HTTP backend.
 
 This script demonstrates how to:
-1. Initialize the AsyncOffersClient with the default httpx backend.
+1. Initialize the OffersClient with the `requests` backend.
 2. Create and register a new product.
 3. Retrieve offers for that product.
 
 To run this example:
-1. Make sure you have the SDK installed (`pip install .` or `uv pip install .`).
+1. Make sure you have the SDK and `requests` installed:
+   `uv pip install .[requests]` or `pip install .[requests]`
 2. Set your refresh token as an environment variable:
    export APPLIFTING_REFRESH_TOKEN="your-refresh-token-here"
-3. Run the script: `python examples/async_usage.py`
+3. Run the script: `python examples/sync_usage_requests.py`
 
 Note: If you get an error about "Cannot generate access token because another is valid",
 this is expected behavior when there's already an active token. Wait a few minutes and try again.
 """
 
-import asyncio
 import os
 from uuid import uuid4
 
 from applifting_python_sdk import (
-    AsyncOffersClient,
+    OffersClient,
     Product,
     ProductAlreadyExists,
     ProductNotFound,
@@ -29,27 +29,27 @@ from applifting_python_sdk import (
 from applifting_python_sdk.exceptions import AppliftingSDKError
 
 
-async def main() -> None:
-    """A basic example of using the async SDK client with the default httpx backend."""
+def main() -> None:
+    """An example of using the synchronous SDK client with `requests`."""
     refresh_token = os.getenv("APPLIFTING_REFRESH_TOKEN")
     if not refresh_token:
         raise ValueError("APPLIFTING_REFRESH_TOKEN environment variable not set.")
 
-    # The client can be used as an async context manager, which handles cleanup.
-    # This uses the default httpx HTTP backend.
-    async with AsyncOffersClient(refresh_token=refresh_token) as client:
+    # Initialize the client with the `requests` backend.
+    # This requires the `requests` extra to be installed.
+    with OffersClient(refresh_token=refresh_token, http_backend="requests") as client:
         product = Product(
             id=uuid4(),
-            name="Super Widget",
-            description="A high-quality widget for all your needs.",
+            name="Super Sync Widget (via Requests)",
+            description="A high-quality widget registered via the requests backend.",
         )
         print(f"Attempting to register product '{product.name}' with ID: {product.id}")
         try:
-            registered_id = await client.register_product(product)
+            registered_id = client.register_product(product)
             print(f"-> Product registered successfully with ID: {registered_id}")
 
             print(f"Fetching offers for product ID: {registered_id}...")
-            offers = await client.get_offers(registered_id)
+            offers = client.get_offers(registered_id)
             print(f"-> Found offers: {offers}")
 
         except (ProductAlreadyExists, ProductNotFound, AppliftingSDKError) as e:
@@ -57,4 +57,4 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
