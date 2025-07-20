@@ -7,6 +7,7 @@ A Python SDK for the Applifting Offers microservice. This SDK provides both asyn
 -   **Dual Clients**: Offers both `AsyncOffersClient` and `OffersClient` to fit modern asynchronous applications and traditional synchronous codebases.
 -   **Pluggable HTTP Clients**: Supports `httpx`, `requests`, and `aiohttp` as underlying HTTP backends.
 -   **Transparent Authentication**: Automatically manages JWT access token refreshing, simplifying API interaction.
+-   **Configurable Caching**: In-memory, time-based caching for `get_offers` to reduce redundant API calls.
 -   **Clean API Design**: Provides a high-level, intuitive interface (`register_product`, `get_offers`) over the generated API client.
 -   **Robust Error Handling**: Maps API responses to specific, custom exceptions for predictable error management (e.g., `ProductNotFound`, `ProductAlreadyExists`).
 -   **Type Safety**: Fully type-hinted codebase to support static analysis and improve developer experience.
@@ -74,6 +75,24 @@ if __name__ == "__main__":
 ```
 
 For detailed, runnable scripts, including a synchronous example and examples of using different HTTP backends, see the `examples/` directory.
+
+### Caching
+
+To reduce network traffic, the client includes a built-in in-memory cache for the `get_offers` method. By default, results are cached for 60 seconds. You can configure this by passing the `offers_ttl_seconds` parameter to the client constructor.
+
+```python
+# Cache offers for 5 minutes (300 seconds)
+client = OffersClient(
+    refresh_token=refresh_token,
+    offers_ttl_seconds=300,
+)
+
+# Disable caching completely
+client = OffersClient(
+    refresh_token=refresh_token,
+    offers_ttl_seconds=0,
+)
+```
 
 ### 3. Using the CLI
 
@@ -173,10 +192,3 @@ The project includes GitHub Actions workflows for:
 - **Continuous Integration** – runs linting, type checking, tests, and coverage on pushes & PRs targeting `dev` and `main`.
 - **Release** – on tags matching `v*`, verifies the tag matches `pyproject.toml` version, builds the distribution, and publishes to TestPyPI (configure secrets to publish to real PyPI).
 - **Dev → Main PR automation** – when you push to `dev`, a pull request from `dev` to `main` is (created if missing) or left alone if already open. Review the PR, ensure CI is green, then merge via the GitHub UI. Enable GitHub auto‑merge if you want the merge to happen automatically after checks pass.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
----
-This SDK was created as a solution to the Applifting Python task.
