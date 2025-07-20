@@ -3,7 +3,7 @@ import time
 from collections.abc import AsyncGenerator, Generator, Sequence
 from http import HTTPStatus
 from types import TracebackType
-from typing import Any, TypeVar, cast
+from typing import Any, Literal, TypeVar, cast
 from uuid import UUID
 
 import httpx
@@ -27,6 +27,7 @@ from .constants import (
 )
 from .exceptions import APIError, ProductAlreadyExists, ProductNotFound
 from .models import Offer, Product
+from .transports import AioHTTPTransport, RequestsTransport
 
 # Type variable used to specialise _BaseClient for sync or async back-ends.
 ClientT = TypeVar("ClientT")
@@ -162,10 +163,17 @@ class AsyncOffersClient(_BaseClient[httpx.AsyncClient]):
         base_url: str = API_BASE_URL_DEFAULT,
         retries: int = DEFAULT_RETRIES,
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        http_backend: Literal["httpx", "aiohttp"] = "httpx",
         **httpx_args: Any,
     ) -> None:
         super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
-        transport = httpx_args.pop("transport", httpx.AsyncHTTPTransport(retries=retries))
+
+        if http_backend == "aiohttp":
+            transport = httpx_args.pop("transport", AioHTTPTransport())
+        elif http_backend == "httpx":
+            transport = httpx_args.pop("transport", httpx.AsyncHTTPTransport(retries=retries))
+        else:  # pragma: no cover
+            raise ValueError("AsyncOffersClient supports only 'httpx' or 'aiohttp' backends.")
 
         self._http_client = httpx.AsyncClient(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
         self._generated_client.set_async_httpx_client(self._http_client)
@@ -204,10 +212,17 @@ class OffersClient(_BaseClient[httpx.Client]):
         base_url: str = API_BASE_URL_DEFAULT,
         retries: int = DEFAULT_RETRIES,
         token_ttl_seconds: int = TOKEN_TTL_SECONDS_DEFAULT,
+        http_backend: Literal["httpx", "requests"] = "httpx",
         **httpx_args: Any,
     ) -> None:
         super().__init__(refresh_token, base_url, token_ttl_seconds=token_ttl_seconds)
-        transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=retries))
+
+        if http_backend == "requests":
+            transport = httpx_args.pop("transport", RequestsTransport())
+        elif http_backend == "httpx":
+            transport = httpx_args.pop("transport", httpx.HTTPTransport(retries=retries))
+        else:  # pragma: no cover
+            raise ValueError("OffersClient supports only 'httpx' or 'requests' backends.")
 
         self._http_client = httpx.Client(base_url=base_url, auth=self._auth, transport=transport, **httpx_args)
         self._generated_client.set_httpx_client(self._http_client)
