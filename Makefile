@@ -22,12 +22,12 @@ format:  ## Format code
 	uv run ruff format .
 
 type-check:  ## Run type checking
-	uv run mypy
+	uv run mypy ./src/applifting_python_sdk ./tests
 
 ci:  ## Run all CI checks (lint, format, type-check, test)
 	uv run ruff check .
 	uv run ruff format --check .
-	uv run mypy
+	uv run mypy ./src/applifting_python_sdk ./tests
 	uv run pytest tests/ -v
 
 build:  ## Build package

@@ -5,6 +5,7 @@ A Python SDK for the Applifting Offers microservice. This SDK provides both asyn
 ## Features
 
 -   **Dual Clients**: Offers both `AsyncOffersClient` and `OffersClient` to fit modern asynchronous applications and traditional synchronous codebases.
+-   **Pluggable HTTP Clients**: Supports `httpx`, `requests`, and `aiohttp` as underlying HTTP backends.
 -   **Transparent Authentication**: Automatically manages JWT access token refreshing, simplifying API interaction.
 -   **Clean API Design**: Provides a high-level, intuitive interface (`register_product`, `get_offers`) over the generated API client.
 -   **Robust Error Handling**: Maps API responses to specific, custom exceptions for predictable error management (e.g., `ProductNotFound`, `ProductAlreadyExists`).
@@ -72,7 +73,7 @@ if __name__ == "__main__":
     asyncio.run(main())
 ```
 
-For detailed, runnable scripts, including a synchronous example, see the `examples/` directory.
+For detailed, runnable scripts, including a synchronous example and examples of using different HTTP backends, see the `examples/` directory.
 
 ### 3. Using the CLI
 
@@ -109,7 +110,7 @@ The repository is organized into several key directories:
     -   `exceptions.py`: Custom exception classes for error handling.
     -   `cli.py`: Command-line interface for interacting with the API from the terminal.
 -   `tests`: The test suite, using `pytest` and `respx` for mocking API calls.
--   `examples`: Runnable scripts demonstrating how to use both the synchronous and asynchronous clients.
+-   `examples`: Runnable scripts demonstrating SDK usage, including how to use different HTTP client backends (`httpx`, `requests`, `aiohttp`).
 
 ## Development
 
