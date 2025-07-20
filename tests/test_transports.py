@@ -7,10 +7,11 @@ from http import HTTPStatus
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 import respx
 
-from applifting_python_sdk import AsyncOffersClient, OffersClient
+from applifting_python_sdk import AsyncHook, AsyncOffersClient, OffersClient, SyncHook
 from applifting_python_sdk._generated.python_exercise_client.api.default import (
     auth_api_v1_auth_post,
     get_offers_api_v1_products_product_id_offers_get,
@@ -151,3 +152,86 @@ async def test_async_offers_client_with_aiohttp_backend(
         assert str(kwargs["url"]) == expected_url
         assert "authorization" in kwargs["headers"]
         assert kwargs["headers"]["authorization"] == f"Bearer {auth_response.access_token}"
+
+
+@patch("requests.Session.send")
+def test_offers_client_with_requests_backend_and_hooks(
+    mock_send: MagicMock,
+    base_url: str,
+    refresh_token: str,
+) -> None:
+    """Ensure OffersClient works correctly with the requests backend and hooks."""
+    product_id = uuid4()
+    auth_response = create_test_auth_response()
+    offer_response = create_test_offer_response()
+    auth_url = get_api_path_for_auth(base_url)
+
+    # Create a mock hook
+    mock_hook = MagicMock(spec=SyncHook)
+
+    with respx.mock(base_url=base_url) as mock_router:
+        mock_router.post(auth_url).respond(get_success_status_for_auth(), json=auth_response.to_dict())
+
+        mock_response = MagicMock()
+        mock_response.status_code = get_success_status_for_offers()
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.content = json.dumps([offer_response.to_dict()]).encode("utf-8")
+        mock_send.return_value = mock_response
+
+        with OffersClient(
+            refresh_token=refresh_token, base_url=base_url, http_backend="requests", hooks=[mock_hook]
+        ) as client:
+            client.get_offers(product_id)
+
+    # Assert that the hook methods were called
+    mock_hook.on_request.assert_called_once()
+    mock_hook.on_response.assert_called_once()
+
+    # Verify the arguments passed to the hooks
+    request_call = mock_hook.on_request.call_args
+    assert "request" in request_call.kwargs
+    assert isinstance(request_call.kwargs["request"], httpx.Request)
+
+    response_call = mock_hook.on_response.call_args
+    assert "response" in response_call.kwargs
+    assert isinstance(response_call.kwargs["response"], httpx.Response)
+
+
+@pytest.mark.asyncio
+@patch("aiohttp.ClientSession.request")
+async def test_async_offers_client_with_aiohttp_backend_and_hooks(
+    mock_request: MagicMock,
+    base_url: str,
+    refresh_token: str,
+) -> None:
+    """Ensure AsyncOffersClient works correctly with the aiohttp backend and hooks."""
+    product_id = uuid4()
+    auth_response = create_test_auth_response()
+    offer_response = create_test_offer_response()
+    auth_url = get_api_path_for_auth(base_url)
+
+    # Create a mock hook
+    mock_hook = MagicMock(spec=AsyncHook)
+    mock_hook.on_request = AsyncMock()
+    mock_hook.on_response = AsyncMock()
+
+    with respx.mock(base_url=base_url) as mock_router:
+        mock_router.post(auth_url).respond(get_success_status_for_auth(), json=auth_response.to_dict())
+
+        mock_response = AsyncMock()
+        mock_response.status = get_success_status_for_offers()
+        mock_response.headers = {"Content-Type": "application/json"}
+        mock_response.read.return_value = json.dumps([offer_response.to_dict()]).encode("utf-8")
+        mock_response.version = MagicMock(major=1, minor=1)
+
+        async_context_manager = AsyncMock(__aenter__=AsyncMock(return_value=mock_response))
+        mock_request.return_value = async_context_manager
+
+        async with AsyncOffersClient(
+            refresh_token=refresh_token, base_url=base_url, http_backend="aiohttp", hooks=[mock_hook]
+        ) as client:
+            await client.get_offers(product_id)
+
+    # Assert that the hook methods were called
+    mock_hook.on_request.assert_awaited_once()
+    mock_hook.on_response.assert_awaited_once()
