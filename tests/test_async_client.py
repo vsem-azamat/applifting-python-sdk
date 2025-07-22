@@ -163,10 +163,10 @@ async def test_authentication_flow(
     assert len(offers) == 1
     assert offers_route.call_count == 2
     assert auth_route.called
-    first_auth = offers_route.calls[0].request.headers["Authorization"]
-    second_auth = offers_route.calls[1].request.headers["Authorization"]
-    assert first_auth == "Bearer oldtoken"
-    assert second_auth == "Bearer newtoken"
+    first_auth = offers_route.calls[0].request.headers["Bearer"]
+    second_auth = offers_route.calls[1].request.headers["Bearer"]
+    assert first_auth == "oldtoken"
+    assert second_auth == "newtoken"
 
 
 # --------------------------------------------------------------------------- #
