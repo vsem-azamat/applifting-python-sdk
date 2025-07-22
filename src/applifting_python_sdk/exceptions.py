@@ -13,6 +13,12 @@ class AuthenticationError(AppliftingSDKError):
     pass
 
 
+class TokenRefreshDeniedError(AuthenticationError):
+    """Raised when the API denies a token refresh request, e.g., due to rate limiting."""
+
+    pass
+
+
 class APIError(AppliftingSDKError):
     """Raised when the API returns an unexpected error.
 
