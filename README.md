@@ -127,6 +127,28 @@ You can find a ready‑to‑run script demonstrating the above commands in
 
 ## Advanced Usage
 
+### Configuration & Environment Variables
+
+The SDK can be configured through various parameters and environment variables:
+
+#### Environment Variables
+-   **`APPLIFTING_REFRESH_TOKEN`**: Your refresh token for authentication (used by CLI and examples)
+-   **Default API Base URL**: `https://python.exercise.applifting.cz` (can be overridden in client constructor)
+-   **Default Token TTL**: 270 seconds (4.5 minutes) - refreshes 30 seconds early from the ~5-minute API tokens
+
+#### Client Configuration
+```python
+client = OffersClient(
+    refresh_token="your-token",
+    base_url="https://custom-api.example.com",  # Override default URL
+    retries=5,                                   # HTTP retries (default: 3)
+    token_ttl_seconds=300,                      # Token cache duration
+    offers_ttl_seconds=120,                     # Offers cache duration
+    http_backend="httpx",                       # Backend choice
+    hooks=[LoggingHook()],                      # Middleware hooks
+)
+```
+
 ### Caching
 
 To reduce network traffic, the client includes a built-in in-memory cache for the `get_offers` method. By default, results are cached for 60 seconds. You can configure this by passing the `offers_ttl_seconds` parameter to the client constructor.
@@ -289,8 +311,16 @@ The repository is organized into several key directories:
     -   `cli.py`: Command-line interface for interacting with the API from the terminal.
     -   `cache.py`: In-memory caching layer for offers.
     -   `transports.py`: Custom transport bridges that enable support for `requests` and `aiohttp`.
+    -   `hooks.py`: Protocol definitions for middleware hooks system.
+    -   `constants.py`: Configuration constants and defaults.
 -   `tests`: The test suite, using `pytest` and `respx` for mocking API calls.
 -   `examples`: Runnable scripts demonstrating SDK usage.
+    -   `async_usage.py`: Basic async client example.
+    -   `sync_usage.py`: Basic sync client example.
+    -   `async_usage_aiohttp.py`: Async client with aiohttp backend.
+    -   `sync_usage_requests.py`: Sync client with requests backend.
+    -   `hooks_usage.py`: Middleware hooks examples.
+    -   `cli_usage.sh`: CLI usage examples.
 -   `.github/workflows`: CI/CD pipelines for testing, releasing, and PR automation.
 
 ### Authentication Flow
@@ -323,6 +353,7 @@ The SDK implements a flexible middleware hooks system that allows users to inter
 -   **Protocol-Based**: Uses Python's `typing.Protocol` (`SyncHook`, `AsyncHook`) for type safety and flexibility, avoiding rigid class inheritance.
 -   **Backend Agnostic**: Works seamlessly across all supported HTTP backends (`httpx`, `requests`, `aiohttp`).
 -   **Unified Interface**: All hooks receive `httpx.Request` and `httpx.Response` objects, regardless of the underlying transport, providing a consistent developer experience.
+-   **Zero-Overhead**: Hooks are only invoked when provided; no performance penalty when unused.
 
 #### Architecture Overview
 
@@ -340,6 +371,56 @@ The client layer passes the hooks to the transport layer. For `requests` and `ai
                    │ (Calls user hooks)│    │ (on_request, on_response)│
                    └───────────────────┘    └──────────────────────────┘
 ```
+
+#### Usage Patterns
+
+**Basic Logging Hook:**
+```python
+class LoggingHook(SyncHook):
+    def on_request(self, *, request: httpx.Request) -> None:
+        print(f">>> {request.method} {request.url}")
+
+    def on_response(self, *, response: httpx.Response) -> None:
+        print(f"<<< {response.status_code}")
+
+client = OffersClient(hooks=[LoggingHook()])
+```
+
+**Metrics Collection Hook:**
+```python
+class MetricsHook(AsyncHook):
+    async def on_request(self, *, request: httpx.Request) -> None:
+        self.start_time = time.time()
+
+    async def on_response(self, *, response: httpx.Response) -> None:
+        duration = time.time() - self.start_time
+        await self.metrics_client.record_http_request(
+            method=request.method,
+            status=response.status_code,
+            duration=duration
+        )
+```
+
+### Data Models
+
+The SDK provides clean, type-safe data models:
+
+-   **Product**: Represents an item that can be registered.
+    -   `id`: `UUID` (auto-generated if not provided)
+    -   `name`: `str`
+    -   `description`: `str`
+-   **Offer**: Represents a price offering for a product.
+    -   `id`: `UUID`
+    -   `price`: `int` (price in cents/smallest currency unit)
+    -   `items_in_stock`: `int`
+
+### API Endpoints
+
+The SDK interacts with three main API endpoints:
+
+-   `POST /api/v1/auth`: Exchanges a long-lived **Refresh Token** for a short-lived **Access Token**.
+-   `POST /api/v1/products/register`: Registers a new product. Requires a valid Access Token.
+-   `GET /api/v1/products/{product_id}/offers`: Retrieves all available offers for a given product ID. Requires a valid Access Token.
 
 ## Development
 
@@ -359,33 +440,42 @@ uv sync --dev
 We provide a Makefile for common development tasks:
 
 ```bash
-make help              # Show all available commands
-make dev-install       # Install package and dev dependencies
-make test              # Run tests
-make test-cov          # Run tests with coverage report
-make lint              # Run linting
-make format            # Format code
-make type-check        # Run type checking
-make ci                # Run all CI checks
-make build             # Build package
-make clean             # Clean build artifacts
+make help                  # Show all available commands
+make install              # Install package in development mode
+make dev-install          # Install package and dev dependencies
+make test                 # Run tests
+make test-cov             # Run tests with coverage report
+make lint                 # Run linting
+make format               # Format code
+make type-check           # Run type checking
+make ci                   # Run all CI checks (lint, format, type-check, test)
+make build                # Build package
+make clean                # Clean build artifacts
+make pre-commit-install   # Install pre-commit hooks
+make pre-commit-run       # Run pre-commit on all files
 ```
 
 ### Running Tests
 
-The test suite ensures the reliability of the SDK. Before running tests, copy the example environment file and add your refresh token.
+The test suite ensures the reliability of the SDK. Before running tests, copy the example environment file and add your refresh token (if it exists).
 
 ```bash
-cp .env.example .env
-# Now edit .env and add your token
+# If .env.example exists, copy it and add your token
+cp .env.example .env  # (optional, only if .env.example exists)
+# Edit .env and add your APPLIFTING_REFRESH_TOKEN
 ```
 
-Then, run `pytest`:
+Then, run the tests:
 
 ```bash
 make test
 # or directly:
 uv run pytest
+
+# Run with coverage:
+make test-cov
+# or directly:
+uv run pytest tests/ -v --cov=src/applifting_python_sdk --cov-report=html
 ```
 
 ### Pre-commit Hooks
@@ -394,6 +484,13 @@ We use pre-commit hooks to ensure code quality. Install them with:
 
 ```bash
 make pre-commit-install
+# or directly:
+uv run pre-commit install
+
+# Run pre-commit on all files:
+make pre-commit-run
+# or directly:
+uv run pre-commit run --all-files
 ```
 
 ### CI/CD

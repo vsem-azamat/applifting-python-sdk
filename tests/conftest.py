@@ -39,6 +39,15 @@ _load_dotenv()
 # --------------------------------------------------------------------------- #
 
 
+@pytest.fixture(autouse=True)
+def isolated_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """
+    Isolates the token cache for each test by patching Path.home() to a temporary directory.
+    This prevents state leakage between tests that use the file-based token cache.
+    """
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+
+
 @pytest.fixture(scope="session")
 def base_url() -> str:
     """Base URL for the mocked API."""

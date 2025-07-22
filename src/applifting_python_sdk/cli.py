@@ -16,7 +16,7 @@ from rich.console import Console
 from rich.table import Table
 
 from . import OffersClient, Product
-from .exceptions import AppliftingSDKError, ProductNotFound
+from .exceptions import AppliftingSDKError, ProductNotFound, TokenRefreshDeniedError
 
 # ---------------------------------------------------------------------------- #
 # Typer application                                                            #
@@ -98,7 +98,14 @@ def register_product(
             f"[bold green]Success![/bold green] Product registered with ID: [magenta]{registered_id}[/magenta]"
         )
     except AppliftingSDKError as exc:
-        console.print(f"[bold red]Error:[/bold red] Could not register product. {exc}")
+        if isinstance(exc, TokenRefreshDeniedError):
+            console.print(
+                "[bold yellow]Warning:[/bold yellow] The API denied a token refresh request. "
+                "This can happen if a command was run very recently. "
+                "Please wait a moment and try again."
+            )
+        else:
+            console.print(f"[bold red]Error:[/bold red] Could not register product. {exc}")
         raise typer.Exit(code=1) from None
 
 
@@ -129,7 +136,14 @@ def get_offers(
         console.print(f"[bold red]Error:[/bold red] Product with ID [magenta]{product_id}[/magenta] not found.")
         raise typer.Exit(code=1) from None
     except AppliftingSDKError as exc:
-        console.print(f"[bold red]Error:[/bold red] Could not retrieve offers. {exc}")
+        if isinstance(exc, TokenRefreshDeniedError):
+            console.print(
+                "[bold yellow]Warning:[/bold yellow] The API denied a token refresh request. "
+                "This can happen if a command was run very recently. "
+                "Please wait a moment and try again."
+            )
+        else:
+            console.print(f"[bold red]Error:[/bold red] Could not retrieve offers. {exc}")
         raise typer.Exit(code=1) from None
 
 

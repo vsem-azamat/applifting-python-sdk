@@ -98,8 +98,8 @@ def test_offers_client_with_requests_backend(
         sent_request = mock_send.call_args[0][0]
         assert sent_request.method == "GET"
         assert sent_request.url == expected_url
-        assert "authorization" in sent_request.headers
-        assert sent_request.headers["authorization"] == f"Bearer {auth_response.access_token}"
+        assert "bearer" in sent_request.headers
+        assert sent_request.headers["bearer"] == auth_response.access_token
 
 
 @pytest.mark.asyncio
@@ -150,8 +150,8 @@ async def test_async_offers_client_with_aiohttp_backend(
         _, kwargs = mock_request.call_args
         assert kwargs["method"] == "GET"
         assert str(kwargs["url"]) == expected_url
-        assert "authorization" in kwargs["headers"]
-        assert kwargs["headers"]["authorization"] == f"Bearer {auth_response.access_token}"
+        assert "bearer" in kwargs["headers"]
+        assert kwargs["headers"]["bearer"] == auth_response.access_token
 
 
 @patch("requests.Session.send")
