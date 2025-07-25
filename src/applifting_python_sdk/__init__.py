@@ -1,8 +1,12 @@
-"""
-An SDK for the Applifting Offers microservice.
-"""
+"""Applifting Offers API SDK."""
 
-__version__ = "0.1.0"
+from importlib.metadata import PackageNotFoundError, version
+
+try:  # Retrieve the installed package version
+    __version__ = version("applifting-python-sdk")
+except PackageNotFoundError:
+    # fallback for editable installs
+    __version__ = "0.0.0"
 
 from .client import AsyncOffersClient, OffersClient
 from .exceptions import (
